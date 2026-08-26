@@ -1,2 +1,0 @@
-# MPDW
-Praktikum MPDW
