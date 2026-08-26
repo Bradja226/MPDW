@@ -1,1 +1,1043 @@
+---
+title: "Analisis Peramalan Deret Waktu"
+author: "Bradja Putra Jajuli"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: united
+    highlight: tango
+    toc: true
+    toc_float: true
+---
+
+# ENTRY DATA
+
+```{r}
+library(readxl)
+data <- read_xlsx("C:/Users/USER/Downloads/india_2000_2024_daily_weather (1).xlsx", sheet = "Sheet1")
+head(data)
+```
+
+# EKSPLORASI DATA
+
+```{r}
+plot(data, 
+     typle ="l", 
+     main = "Plot Deret Waktu Suhu")
+```
+
+## PENGECEKAN STASIONER
+
+### STASIONER RAGAM
+
+Jika interval kepercayaan $\lambda$ mencakup angka 1 (atau $\lambda \approx 1$), data stasioner dalam ragam.
+Jika $\lambda \neq 1$, data tidak stasioner dalam ragam dan memerlukan transformasi (misalnya logaritma natural jika $\lambda = 0$ atau transformasi Box-Cox).
+
+```{r}
+library (forecast)
+library (MASS)
+
+lambda_opt <- BoxCox.lambda(data$SUHU)
+print (paste("Nilai Lambda Optimum:", round(lambda_opt, 4)))
+bc <- boxcox(data$SUHU ~ 1, lambda = seq(-2,2,0.1))
+lambda_ci <- bc$x[which.max(bc$y)]
+print(paste("Lambda dari Box-Cox plot:", round(lambda_ci, 4)))
+```
+
+Karena lambda ada di sekitar 1, maka data dianggap stasioner dalam ragam 
+
+### STASIONER MEAN 
+
+ADF Test:$H_0$: Data tidak stasioner dalam rataan (memiliki unit root)$H_1$: Data stasioner dalam rataan
+
+KPSS Test:$H_0$: Data stasioner dalam rataan$H_1$: Data tidak stasioner dalam rataanKeputusan: Jika $p\text{-value} > 0.05$, terima $H_0 \rightarrow$ data stasioner dalam rataan.
+
+```{r}
+library(tseries)
+suhu_clean <- na.omit(data$SUHU)
+adf_result <-adf.test(suhu_clean)
+print(adf_result)
+kpss_result <- kpss.test(suhu_clean)
+print(kpss_result)
+```
+Hasil kedua uji menyatakan bahwa data tidak stasioner dalam rataan 
+
+Karena tidak terpenuhi dua jenis stasioner, maka data dianggap tidak stasioner
+
+# SMA (SMOOTH MOVING AVARAGE)
+
+## N = 3
+
+### FORECASETING
+
+```{r}
+library(TTR)
+suhu_clean <- na.omit(data$SUHU)
+mt_sma3 <- SMA(suhu_clean, n=3)
+ft_sma3 <- c(NA, mt_sma3[-length(mt_sma3)])
+ramalan_depan <- tail(mt_sma3, 1)
+cat("Hasil Ramalan untuk Periode Berikutnya (t+1):", ramalan_depan, "\n\n")
+tabel_sma3 <- data.frame(
+  Aktual = suhu_clean, 
+  Mt = mt_sma3, 
+  Ft = ft_sma3, 
+  Error = suhu_clean - ft_sma3
+)
+head(tabel_sma3, 10)
+```
+
+### MENGUKUR KEBAIKAN MODEL 
+
+```{r}
+galat <- na.omit(tabel_sma3$Error)
+aktual_valid <-tabel_sma3$Aktual[!is.na(tabel_sma3$Ft)]
+ft_valid <- na.omit(tabel_sma3$Ft)
+
+mad <- mean(abs(galat))
+mse <- mean(galat^2)
+rmse <- sqrt(mse)
+mape <- mean(abs(galat/aktual_valid))*100
+
+cat("=== Ukuran Kebaikan Model SMA (N=3) ===\n")
+cat("MAD :", round(mad, 4), "\n")
+cat("MSE :", round(mse, 4), "\n")
+cat("RMSE :", round(rmse, 4), "\n")
+cat("MAPE :", round(mape, 3), "\n")
+```
+### VISUALISASI
+
+```{r}
+plot(suhu_clean, 
+     type ="l", 
+     col ="blue",
+     lwd = 1.5, 
+     main = "Perbandingan Data Aktual vs Data RAMALAN SMA (N=3)", 
+     xlab = "Periode Waktu", 
+     ylab = "Suhu")
+lines(ft_sma3, col = "red",
+      lws = 2, 
+      lty = 1)
+legend("topright", 
+       inset = c(0.6, 0.2), # Menggeser legenda keluar ke arah kanan
+       legend = c("Suhu Clean (Aktual)", "Ramalan SMA (Ft)"),
+       col = c("blue", "red"), 
+       lwd = 2, 
+       bty = "n")
+```
+
+## N = 4 
+
+### FORECASETING
+
+```{r}
+mt_sma4 <- SMA(suhu_clean, n = 4)
+ft_sma4 <- c(NA, mt_sma4[-length(mt_sma4)])
+ramalan_depan4 <- tail(mt_sma4, 1)
+cat ("Hasil Ramalan untuk Periode Berikutnya (t+1):", ramalan_depan4, "\n\n")
+
+tabel_sma4 <- data.frame(
+  Aktual = suhu_clean, 
+  Mt = mt_sma4, 
+  Ft = ft_sma4, 
+  Error = suhu_clean - ft_sma4
+)
+head(tabel_sma4)
+```
+
+### MENGUKUR KEBAIKKAN MODEL 
+
+```{r}
+galat <- na.omit(tabel_sma4$Error)
+aktual_valid <-tabel_sma4$Aktual[!is.na(tabel_sma4$Ft)]
+ft_valid <- na.omit(tabel_sma4$Ft)
+
+mad <- mean(abs(galat))
+mse <- mean(galat^2)
+rmse <- sqrt(mse)
+mape <- mean(abs(galat/aktual_valid))*100
+
+cat("=== Ukuran Kebaikan Model SMA (N=3) ===\n")
+cat("MAD :", round(mad, 4), "\n")
+cat("MSE :", round(mse, 4), "\n")
+cat("RMSE :", round(rmse, 4), "\n")
+cat("MAPE :", round(mape, 3), "\n")
+```
+### VISUALISASI 
+
+```{r}
+plot(suhu_clean, 
+     type ="l", 
+     col ="blue",
+     lwd = 1.5, 
+     main = "Perbandingan Data Aktual vs Data RAMALAN SMA (N=4)", 
+     xlab = "Periode Waktu", 
+     ylab = "Suhu")
+lines(ft_sma4, col = "red",
+      lws = 2, 
+      lty = 1)
+legend("topright", 
+       inset = c(0.6, 0), # Menggeser legenda keluar ke arah kanan
+       legend = c("Suhu Clean (Aktual)", "Ramalan SMA (Ft)"),
+       col = c("blue", "red"), 
+       lwd = 2, 
+       bty = "n")
+```
+
+## N = 5
+
+### FORECASETING
+
+```{r}
+library(TTR)
+suhu_clean <- na.omit(data$SUHU)
+mt_sma5 <- SMA(suhu_clean, n=5)
+ft_sma5 <- c(NA, mt_sma5[-length(mt_sma5)])
+ramalan_depan5 <- tail(mt_sma5, 1)
+cat ("Hasil Ramalan untuk Periode Berikutnya (t+1):", ramalan_depan5, "\n\n")
+tabel_sma5 <- data.frame(
+  Aktual = suhu_clean, 
+  Mt = mt_sma5,
+  Ft = ft_sma5 ,
+  Error = suhu_clean - ft_sma5
+)
+head(tabel_sma5)
+```
+
+### MENGUKUR KEBAIKKAN MODEL 
+
+```{r}
+galat <- na.omit(tabel_sma5$Error)
+aktual_valid <- tabel_sma5$Aktual[!is.na(tabel_sma5$Ft)]
+ft_valid <- na.omit(tabel_sma5$Ft)
+
+mad <- mean(abs(galat))
+mse <- mean(galat^2)
+rmse <- sqrt(mse)
+mape <- mean(abs(galat/aktual_valid))*100
+
+cat("=== Ukuran Kebaikkan Model SMA (N=5) ===\n")
+cat("MAD :", round(mad, 4), "\n")
+cat ("MSE :", round(mse, 4), "\n")
+cat ("RMSE :", round(rmse, 4), "\n")
+cat ("MAPE:", round(mape, 4), "\n")
+```
+### VISUALISASI 
+
+```{r}
+plot(suhu_clean, 
+     col = "blue", 
+     type = "l", 
+     main = "Perbandingan Data Aktual vs Data Ramalan SMA (N=5)",
+     xlab = "Periode",
+     ylab = "Suhu")
+lines(ft_sma5, 
+      col = "red", )
+legend ("topright", 
+        inset = c(0.5, 0.2),
+        legend = c("Suhu Clean (Aktual)", "Ramalan SMA(Ft)"), 
+        col = c("blue", "red"), 
+        lwd = 2, 
+        bty = "n")
+
+```
+
+# DMA (DOUBLE MOVING AVARAGE)
+
+## N = 3
+
+### FORECASETING 
+
+```{r}
+library(TTR)
+suhu_clean <- na.omit(data$SUHU)
+N <- 3
+
+mt_prime <- SMA(suhu_clean, n = N)
+mt_double_prime <- SMA(mt_prime, n = N)
+
+at <- 2* mt_prime-mt_double_prime 
+bt <- (2/(N-1))*(mt_prime-mt_double_prime)
+
+at_lag <- c(NA, at[-length(at)])
+bt_lag <- c(NA, bt[-length(bt)])
+ft_dma3 <- at_lag + bt_lag
+
+at_terakhir <- tail(na.omit(at), 1)
+bt_terakhir <- tail(na.omit(bt), 1)
+ramalan_depan_dma <- at_terakhir + (bt_terakhir*1)
+
+tabel_dma3 <- data.frame(
+  aktual = suhu_clean, 
+  mt_prime = mt_prime, 
+  mt_double_prime = mt_double_prime, 
+  at = at, 
+  bt = bt, 
+  Ft = ft_dma3 ,
+  Error = suhu_clean - ft_dma3
+)
+head(tabel_dma3)
+```
+### UKURAN KEBAIKKAN MODEL 
+
+```{r}
+valid_idx <- !is.na(tabel_dma3$Ft)
+galat <- tabel_dma3$Error[valid_idx]
+aktual_valid <- tabel_dma3$aktual[valid_idx]
+
+mad <- mean(abs(galat))
+mse <- mean (galat^2)
+rmse <- sqrt (mse)
+mape <- mean(abs(galat/aktual_valid))*100
+
+cat ("MAD:", round(mad, 4), "\n")
+cat ("MSE:", round(mse, 4), "\n")
+cat ("RMSE:", round(rmse, 4), "\n")
+cat("MAPE:", round(mape, 4), "\n")
+```
+### VISUALISASI 
+
+```{r}
+plot(suhu_clean, 
+     type ="l", 
+     col = "blue", 
+     main = "Perbandingan data aktual vs data ramalan", 
+     xlab = "periode", 
+     ylab = "suhu")
+lines (ft_dma3, 
+       col = "red")
+legend("topright", 
+       inset = c(0.6, 0.2), 
+       legend = c("Suhu Clean", "Suhu Ramalan"), 
+       col = c("blue", "red"),
+       lwd = 2,
+       bty = N,)
+```
+
+## N = 4 
+
+### FORECASETING 
+
+```{r}
+library(TTR)
+N <- 4
+
+mt_prime <- SMA(suhu_clean, n = N)
+mt_double_prime <- SMA(mt_prime, n = N)
+
+at <- 2* mt_prime-mt_double_prime 
+bt <- (2/(N-1))*(mt_prime-mt_double_prime)
+
+at_lag <- c(NA, at[-length(at)])
+bt_lag <- c(NA, bt[-length(bt)])
+ft_dma4 <- at_lag + bt_lag
+
+at_terakhir <- tail(na.omit(at), 1)
+bt_terakhir <- tail(na.omit(bt), 1)
+ramalan_depan_dma <- at_terakhir + (bt_terakhir*1)
+
+tabel_dma4 <- data.frame(
+  aktual = suhu_clean, 
+  mt_prime = mt_prime, 
+  mt_double_prime = mt_double_prime, 
+  at = at, 
+  bt = bt, 
+  Ft = ft_dma4 ,
+  Error = suhu_clean - ft_dma4
+)
+head(tabel_dma4)
+```
+### UKURAN KEBAIKKAN MODEL 
+
+```{r}
+valid_idx <- !is.na(tabel_dma4$Ft)
+galat <- tabel_dma4$Error[valid_idx]
+aktual_valid <- tabel_dma4$aktual[valid_idx]
+
+mad <- mean(abs(galat))
+mse <- mean (galat^2)
+rmse <- sqrt (mse)
+mape <- mean(abs(galat/aktual_valid))*100
+
+cat ("MAD:", round(mad, 4), "\n")
+cat ("MSE:", round(mse, 4), "\n")
+cat ("RMSE:", round(rmse, 4), "\n")
+cat("MAPE:", round(mape, 4), "\n")
+```
+### VISUALISASI 
+
+```{r}
+plot(suhu_clean, 
+     type ="l", 
+     col = "blue", 
+     main = "Perbandingan data aktual vs data ramalan", 
+     xlab = "periode", 
+     ylab = "suhu")
+lines (ft_dma4, 
+       col = "red")
+legend("topright", 
+       inset = c(0.6, 0.2), 
+       legend = c("Suhu Clean", "Suhu Ramalan"), 
+       col = c("blue", "red"),
+       lwd = 2,
+       bty = N,)
+```
+
+
+## N = 5
+
+### FORECASETING 
+
+```{r}
+library(TTR)
+N <- 5
+
+mt_prime <- SMA(suhu_clean, n = N)
+mt_double_prime <- SMA(mt_prime, n = N)
+
+at <- 2* mt_prime-mt_double_prime 
+bt <- (2/(N-1))*(mt_prime-mt_double_prime)
+
+at_lag <- c(NA, at[-length(at)])
+bt_lag <- c(NA, bt[-length(bt)])
+ft_dma5 <- at_lag + bt_lag
+
+at_terakhir <- tail(na.omit(at), 1)
+bt_terakhir <- tail(na.omit(bt), 1)
+ramalan_depan_dma <- at_terakhir + (bt_terakhir*1)
+
+tabel_dma5 <- data.frame(
+  aktual = suhu_clean, 
+  mt_prime = mt_prime, 
+  mt_double_prime = mt_double_prime, 
+  at = at, 
+  bt = bt, 
+  Ft = ft_dma5 ,
+  Error = suhu_clean - ft_dma5
+)
+head(tabel_dma5)
+```
+### UKURAN KEBAIKKAN MODEL 
+
+```{r}
+valid_idx <- !is.na(tabel_dma5$Ft)
+galat <- tabel_dma5$Error[valid_idx]
+aktual_valid <- tabel_dma5$aktual[valid_idx]
+
+mad <- mean(abs(galat))
+mse <- mean (galat^2)
+rmse <- sqrt (mse)
+mape <- mean(abs(galat/aktual_valid))*100
+
+cat ("MAD:", round(mad, 4), "\n")
+cat ("MSE:", round(mse, 4), "\n")
+cat ("RMSE:", round(rmse, 4), "\n")
+cat("MAPE:", round(mape, 4), "\n")
+```
+### VISUALISASI 
+
+```{r}
+plot(suhu_clean, 
+     type ="l", 
+     col = "blue", 
+     main = "Perbandingan data aktual vs data ramalan", 
+     xlab = "periode", 
+     ylab = "suhu")
+lines (ft_dma5, 
+       col = "red")
+legend("topright", 
+       inset = c(0.65, 0.2), 
+       legend = c("Suhu Clean", "Suhu Ramalan"), 
+       col = c("blue", "red"),
+       lwd = 2,
+       bty = N,)
+```
+
+# SES (SINGLE EXPONENTIAL SMOOTHING)
+
+## ALPHA = 0.01
+
+### FORECASETING 
+
+```{r}
+suhu_clean <- na.omit(data$SUHU)
+n <- length(suhu_clean)
+alpha <-0.01
+
+St <- numeric(n)
+Ft <- rep(NA, n)
+
+St[1] <- suhu_clean[1]
+
+for (t in 2:n){
+  Ft[t] <- St[t-1]
+  St[t]<- alpha*suhu_clean[t]+(1-alpha)*St[t-1]
+}
+
+ramalan_depan_ses <- St[n]
+cat("Hasil Ramalan SES (alpha=0.01) untuk Periode Berikutnya (t+1):", ramalan_depan_ses, "\n\n")
+
+tabel_ses <- data.frame(
+  aktual = suhu_clean, 
+  St = St, 
+  Ft = Ft, 
+  Error = suhu_clean - Ft
+)
+
+head(tabel_ses)
+```
+
+### UKURAN KEBAIKKAN MODEL 
+
+```{r}
+valid_idx <- !is.na(tabel_ses$Ft)
+galat <- tabel_ses$Error[valid_idx]
+aktual_valid <- tabel_ses$aktual[valid_idx]
+
+mad <- mean(abs(galat))
+mse <- mean(galat^2)
+rmse <- sqrt(mse)
+mape <- mean (abs(galat/aktual_valid))*100
+
+cat("=== Ukuran Kebaikan Model SES (alpha = 0.01) ===\n")
+cat("MAD  :", round(mad, 4), "\n")
+cat("MSE  :", round(mse, 4), "\n")
+cat("RMSE :", round(rmse, 4), "\n")
+cat("MAPE :", round(mape, 2), "%\n")
+```
+### VISUALISASI
+
+```{r}
+plot(suhu_clean, 
+     type ="l", 
+     col = "blue", 
+     main = "Perbandingan data aktual vs data ramalan", 
+     xlab = "periode", 
+     ylab = "suhu")
+lines (Ft, 
+       col = "red")
+legend("topright", 
+       inset = c(0.6, 0.2), 
+       legend = c("Suhu Clean", "Suhu Ramalan"), 
+       col = c("blue", "red"),
+       lwd = 2,
+       bty = "n",)
+```
+
+## ALPHA = 0.1
+
+### FORECASETING 
+
+```{r}
+suhu_clean <- na.omit(data$SUHU)
+n <- length(suhu_clean)
+alpha <-0.1
+
+St <- numeric(n)
+Ft <- rep(NA, n)
+
+St[1] <- suhu_clean[1]
+
+for (t in 2:n){
+  Ft[t] <- St[t-1]
+  St[t]<- alpha*suhu_clean[t]+(1-alpha)*St[t-1]
+}
+
+ramalan_depan_ses <- St[n]
+cat("Hasil Ramalan SES (alpha=0.01) untuk Periode Berikutnya (t+1):", ramalan_depan_ses, "\n\n")
+
+tabel_ses0.1 <- data.frame(
+  aktual = suhu_clean, 
+  St = St, 
+  Ft = Ft, 
+  Error = suhu_clean - Ft
+)
+
+head(tabel_ses0.1)
+```
+
+### UKURAN KEBAIKKAN MODEL 
+
+```{r}
+valid_idx <- !is.na(tabel_ses0.1$Ft)
+galat <- tabel_ses0.1$Error[valid_idx]
+aktual_valid <- tabel_ses0.1$aktual[valid_idx]
+
+mad <- mean(abs(galat))
+mse <- mean(galat^2)
+rmse <- sqrt(mse)
+mape <- mean (abs(galat/aktual_valid))*100
+
+cat("=== Ukuran Kebaikan Model SES (alpha = 0.01) ===\n")
+cat("MAD  :", round(mad, 4), "\n")
+cat("MSE  :", round(mse, 4), "\n")
+cat("RMSE :", round(rmse, 4), "\n")
+cat("MAPE :", round(mape, 2), "%\n")
+```
+### VISUALISASI
+
+```{r}
+plot(suhu_clean, 
+     type ="l", 
+     col = "blue", 
+     main = "Perbandingan data aktual vs data ramalan", 
+     xlab = "periode", 
+     ylab = "suhu")
+lines (Ft, 
+       col = "red")
+legend("topright", 
+       inset = c(0.6, 0.2), 
+       legend = c("Suhu Clean", "Suhu Ramalan"), 
+       col = c("blue", "red"),
+       lwd = 2,
+       bty = "n",)
+```
+# SES (SINGLE EXPONENTIAL SMOOTHING)
+
+## ALPHA = 0.2
+
+### FORECASETING 
+
+```{r}
+suhu_clean <- na.omit(data$SUHU)
+n <- length(suhu_clean)
+alpha <-0.2
+
+St <- numeric(n)
+Ft <- rep(NA, n)
+
+St[1] <- suhu_clean[1]
+
+for (t in 2:n){
+  Ft[t] <- St[t-1]
+  St[t]<- alpha*suhu_clean[t]+(1-alpha)*St[t-1]
+}
+
+ramalan_depan_ses <- St[n]
+cat("Hasil Ramalan SES (alpha=0.01) untuk Periode Berikutnya (t+1):", ramalan_depan_ses, "\n\n")
+
+tabel_ses0.2 <- data.frame(
+  aktual = suhu_clean, 
+  St = St, 
+  Ft = Ft, 
+  Error = suhu_clean - Ft
+)
+
+head(tabel_ses0.2)
+```
+
+### UKURAN KEBAIKKAN MODEL 
+
+```{r}
+valid_idx <- !is.na(tabel_ses0.2$Ft)
+galat <- tabel_ses0.2$Error[valid_idx]
+aktual_valid <- tabel_ses0.2$aktual[valid_idx]
+
+mad <- mean(abs(galat))
+mse <- mean(galat^2)
+rmse <- sqrt(mse)
+mape <- mean (abs(galat/aktual_valid))*100
+
+cat("=== Ukuran Kebaikan Model SES (alpha = 0.01) ===\n")
+cat("MAD  :", round(mad, 4), "\n")
+cat("MSE  :", round(mse, 4), "\n")
+cat("RMSE :", round(rmse, 4), "\n")
+cat("MAPE :", round(mape, 2), "%\n")
+```
+### VISUALISASI
+
+```{r}
+plot(suhu_clean, 
+     type ="l", 
+     col = "blue", 
+     main = "Perbandingan data aktual vs data ramalan", 
+     xlab = "periode", 
+     ylab = "suhu")
+lines (Ft, 
+       col = "red")
+legend("topright", 
+       inset = c(0.6, 0.2), 
+       legend = c("Suhu Clean", "Suhu Ramalan"), 
+       col = c("blue", "red"),
+       lwd = 2,
+       bty = "n",)
+```
+
+# DES 
+
+## ALPHA = 0.01
+
+### FORECASETING
+
+```{r}
+suhu_clean <- na.omit(data$SUHU)
+n <- length(suhu_clean)
+alpha <- 0.01
+
+st_prime        <- numeric(n)
+st_double_prime <- numeric(n)
+at              <- numeric(n)
+bt              <- numeric(n)
+Ft              <- rep(NA, n)
+
+st_prime[1]        <- suhu_clean[1]
+st_double_prime[1] <- suhu_clean[1]
+at[1]              <- 2 * st_prime[1] - st_double_prime[1]
+bt[1]              <- (alpha / (1 - alpha)) * (st_prime[1] - st_double_prime[1])
+
+for (t in 2:n) {
+  Ft[t] <- at[t - 1] + bt[t - 1]
+  
+  st_prime[t]        <- alpha * suhu_clean[t] + (1 - alpha) * st_prime[t - 1]
+  st_double_prime[t] <- alpha * st_prime[t]   + (1 - alpha) * st_double_prime[t - 1]
+  
+  at[t] <- 2 * st_prime[t] - st_double_prime[t]
+  bt[t] <- (alpha / (1 - alpha)) * (st_prime[t] - st_double_prime[t])
+}
+
+ramalan_depan_des <- at[n] + (bt[n] * 1)
+cat("Hasil Ramalan DES (alpha=0.01) untuk Periode Berikutnya (t+1):", ramalan_depan_des, "\n\n")
+
+tabel_des <- data.frame(
+  Aktual          = suhu_clean,
+  St_Prime        = st_prime,
+  St_Double_Prime = st_double_prime,
+  at              = at,
+  bt              = bt,
+  Ft              = Ft,
+  Error           = suhu_clean - Ft
+)
+
+head(tabel_des, 10)
+```
+
+### UKURAN KEBAIKKAN MODEL 
+
+```{r}
+valid_idx    <- !is.na(tabel_des$Ft)
+galat        <- tabel_des$Error[valid_idx]
+aktual_valid <- tabel_des$Aktual[valid_idx]
+
+mad  <- mean(abs(galat))
+mse  <- mean(galat^2)
+rmse <- sqrt(mse)
+mape <- mean(abs(galat / aktual_valid)) * 100
+
+cat("=== Ukuran Kebaikan Model DES (alpha = 0.01) ===\n")
+cat("MAD  :", round(mad, 4), "\n")
+cat("MSE  :", round(mse, 4), "\n")
+cat("RMSE :", round(rmse, 4), "\n")
+cat("MAPE :", round(mape, 2), "%\n")
+```
+### VISUALISASI
+
+```{r}
+plot(suhu_clean, 
+     type ="l", 
+     col = "blue", 
+     main = "Perbandingan data aktual vs data ramalan", 
+     xlab = "periode", 
+     ylab = "suhu")
+lines (Ft, 
+       col = "red")
+legend("topright", 
+       inset = c(0.6, 0.2), 
+       legend = c("Suhu Clean", "Suhu Ramalan"), 
+       col = c("blue", "red"),
+       lwd = 2,
+       bty = "n",)
+```
+
+## ALPHA = 0.1
+
+### FORECASETING
+
+```{r}
+suhu_clean <- na.omit(data$SUHU)
+n <- length(suhu_clean)
+alpha <- 0.1
+
+st_prime        <- numeric(n)
+st_double_prime <- numeric(n)
+at              <- numeric(n)
+bt              <- numeric(n)
+Ft              <- rep(NA, n)
+
+st_prime[1]        <- suhu_clean[1]
+st_double_prime[1] <- suhu_clean[1]
+at[1]              <- 2 * st_prime[1] - st_double_prime[1]
+bt[1]              <- (alpha / (1 - alpha)) * (st_prime[1] - st_double_prime[1])
+
+for (t in 2:n) {
+  Ft[t] <- at[t - 1] + bt[t - 1]
+  
+  st_prime[t]        <- alpha * suhu_clean[t] + (1 - alpha) * st_prime[t - 1]
+  st_double_prime[t] <- alpha * st_prime[t]   + (1 - alpha) * st_double_prime[t - 1]
+  
+  at[t] <- 2 * st_prime[t] - st_double_prime[t]
+  bt[t] <- (alpha / (1 - alpha)) * (st_prime[t] - st_double_prime[t])
+}
+
+ramalan_depan_des <- at[n] + (bt[n] * 1)
+cat("Hasil Ramalan DES (alpha=0.1) untuk Periode Berikutnya (t+1):", ramalan_depan_des, "\n\n")
+
+tabel_des0.1 <- data.frame(
+  Aktual          = suhu_clean,
+  St_Prime        = st_prime,
+  St_Double_Prime = st_double_prime,
+  at              = at,
+  bt              = bt,
+  Ft              = Ft,
+  Error           = suhu_clean - Ft
+)
+
+head(tabel_des, 10)
+```
+
+
+### UKURAN KEBAIKKAN MODEL 
+
+```{r}
+valid_idx    <- !is.na(tabel_des0.1$Ft)
+galat        <- tabel_des0.1$Error[valid_idx]
+aktual_valid <- tabel_des0.1$Aktual[valid_idx]
+
+mad  <- mean(abs(galat))
+mse  <- mean(galat^2)
+rmse <- sqrt(mse)
+mape <- mean(abs(galat / aktual_valid)) * 100
+
+cat("=== Ukuran Kebaikan Model DES (alpha = 0.01) ===\n")
+cat("MAD  :", round(mad, 4), "\n")
+cat("MSE  :", round(mse, 4), "\n")
+cat("RMSE :", round(rmse, 4), "\n")
+cat("MAPE :", round(mape, 2), "%\n")
+```
+### VISUALISASI
+
+```{r}
+plot(suhu_clean, 
+     type ="l", 
+     col = "blue", 
+     main = "Perbandingan data aktual vs data ramalan", 
+     xlab = "periode", 
+     ylab = "suhu")
+lines (Ft, 
+       col = "red")
+legend("topright", 
+       inset = c(0.6, 0.2), 
+       legend = c("Suhu Clean", "Suhu Ramalan"), 
+       col = c("blue", "red"),
+       lwd = 2,
+       bty = "n",)
+```
+
+## ALPHA = 0.2
+
+### FORECASETING
+
+```{r}
+suhu_clean <- na.omit(data$SUHU)
+n <- length(suhu_clean)
+alpha <- 0.2
+
+st_prime        <- numeric(n)
+st_double_prime <- numeric(n)
+at              <- numeric(n)
+bt              <- numeric(n)
+Ft              <- rep(NA, n)
+
+st_prime[1]        <- suhu_clean[1]
+st_double_prime[1] <- suhu_clean[1]
+at[1]              <- 2 * st_prime[1] - st_double_prime[1]
+bt[1]              <- (alpha / (1 - alpha)) * (st_prime[1] - st_double_prime[1])
+
+for (t in 2:n) {
+  Ft[t] <- at[t - 1] + bt[t - 1]
+  
+  st_prime[t]        <- alpha * suhu_clean[t] + (1 - alpha) * st_prime[t - 1]
+  st_double_prime[t] <- alpha * st_prime[t]   + (1 - alpha) * st_double_prime[t - 1]
+  
+  at[t] <- 2 * st_prime[t] - st_double_prime[t]
+  bt[t] <- (alpha / (1 - alpha)) * (st_prime[t] - st_double_prime[t])
+}
+
+ramalan_depan_des <- at[n] + (bt[n] * 1)
+cat("Hasil Ramalan DES (alpha=0.01) untuk Periode Berikutnya (t+1):", ramalan_depan_des, "\n\n")
+
+tabel_des0.2 <- data.frame(
+  Aktual          = suhu_clean,
+  St_Prime        = st_prime,
+  St_Double_Prime = st_double_prime,
+  at              = at,
+  bt              = bt,
+  Ft              = Ft,
+  Error           = suhu_clean - Ft
+)
+
+head(tabel_des0.2, 10)
+```
+
+### UKURAN KEBAIKKAN MODEL 
+
+```{r}
+valid_idx    <- !is.na(tabel_des0.2$Ft)
+galat        <- tabel_des0.2$Error[valid_idx]
+aktual_valid <- tabel_des0.2$Aktual[valid_idx]
+
+mad  <- mean(abs(galat))
+mse  <- mean(galat^2)
+rmse <- sqrt(mse)
+mape <- mean(abs(galat / aktual_valid)) * 100
+
+cat("=== Ukuran Kebaikan Model DES (alpha = 0.01) ===\n")
+cat("MAD  :", round(mad, 4), "\n")
+cat("MSE  :", round(mse, 4), "\n")
+cat("RMSE :", round(rmse, 4), "\n")
+cat("MAPE :", round(mape, 2), "%\n")
+```
+### VISUALISASI
+
+```{r}
+plot(suhu_clean, 
+     type ="l", 
+     col = "blue", 
+     main = "Perbandingan data aktual vs data ramalan", 
+     xlab = "periode", 
+     ylab = "suhu")
+lines (Ft, 
+       col = "red")
+legend("topright", 
+       inset = c(0.6, 0.2), 
+       legend = c("Suhu Clean", "Suhu Ramalan"), 
+       col = c("blue", "red"),
+       lwd = 2,
+       bty = "n",)
+```
+
+# PERBANDINGAN METODE TERBAIK
+
+```{r}
+library(TTR)
+
+suhu_clean <- na.omit(data$SUHU)
+n <- length(suhu_clean)
+
+hitung_metrik <- function(aktual, ramalan, nama_metode) {
+  valid_idx <- !is.na(ramalan)
+  y_true <- aktual[valid_idx]
+  y_pred <- ramalan[valid_idx]
+  
+  error <- y_true - y_pred
+  mad   <- mean(abs(error))
+  mse   <- mean(error^2)
+  rmse  <- sqrt(mse)
+  mape  <- mean(abs(error / y_true)) * 100
+  
+  data.frame(
+    Metode   = nama_metode,
+    MAD      = round(mad, 4),
+    MSE      = round(mse, 4),
+    RMSE     = round(rmse, 4),
+    MAPE_Pct = round(mape, 2)
+  )
+}
+
+
+calc_sma <- function(x, N) {
+  mt <- SMA(x, n = N)
+  c(NA, mt[-length(mt)])
+}
+ft_sma3 <- calc_sma(suhu_clean, 3)
+ft_sma4 <- calc_sma(suhu_clean, 4)
+ft_sma5 <- calc_sma(suhu_clean, 5)
+
+
+calc_dma <- function(x, N) {
+  mt_p  <- SMA(x, n = N)
+  mt_dp <- SMA(mt_p, n = N)
+  at    <- 2 * mt_p - mt_dp
+  bt    <- (2 / (N - 1)) * (mt_p - mt_dp)
+  
+  at_lag <- c(NA, at[-length(at)])
+  bt_lag <- c(NA, bt[-length(bt)])
+  at_lag + bt_lag
+}
+ft_dma3 <- calc_dma(suhu_clean, 3)
+ft_dma4 <- calc_dma(suhu_clean, 4)
+ft_dma5 <- calc_dma(suhu_clean, 5)
+
+
+calc_ses <- function(x, alpha) {
+  len <- length(x)
+  St  <- numeric(len)
+  Ft  <- rep(NA, len)
+  St[1] <- x[1]
+  for (t in 2:len) {
+    Ft[t] <- St[t - 1]
+    St[t] <- alpha * x[t] + (1 - alpha) * St[t - 1]
+  }
+  Ft
+}
+ft_ses_001 <- calc_ses(suhu_clean, 0.01)
+ft_ses_01  <- calc_ses(suhu_clean, 0.1)
+ft_ses_02  <- calc_ses(suhu_clean, 0.2)
+
+
+calc_des <- function(x, alpha) {
+  len <- length(x)
+  st_p  <- numeric(len)
+  st_dp <- numeric(len)
+  at    <- numeric(len)
+  bt    <- numeric(len)
+  Ft    <- rep(NA, len)
+  
+  st_p[1]  <- x[1]
+  st_dp[1] <- x[1]
+  at[1]    <- 2 * st_p[1] - st_dp[1]
+  bt[1]    <- (alpha / (1 - alpha)) * (st_p[1] - st_dp[1])
+  
+  for (t in 2:len) {
+    Ft[t]    <- at[t - 1] + bt[t - 1]
+    st_p[t]  <- alpha * x[t] + (1 - alpha) * st_p[t - 1]
+    st_dp[t] <- alpha * st_p[t] + (1 - alpha) * st_dp[t - 1]
+    at[t]    <- 2 * st_p[t] - st_dp[t]
+    bt[t]    <- (alpha / (1 - alpha)) * (st_p[t] - st_dp[t])
+  }
+  Ft
+}
+ft_des_001 <- calc_des(suhu_clean, 0.01)
+ft_des_01  <- calc_des(suhu_clean, 0.1)
+ft_des_02  <- calc_des(suhu_clean, 0.2)
+
+
+tabel_perbandingan <- rbind(
+  hitung_metrik(suhu_clean, ft_sma3,    "SMA (N = 3)"),
+  hitung_metrik(suhu_clean, ft_sma4,    "SMA (N = 4)"),
+  hitung_metrik(suhu_clean, ft_sma5,    "SMA (N = 5)"),
+  hitung_metrik(suhu_clean, ft_dma3,    "DMA (N = 3)"),
+  hitung_metrik(suhu_clean, ft_dma4,    "DMA (N = 4)"),
+  hitung_metrik(suhu_clean, ft_dma5,    "DMA (N = 5)"),
+  hitung_metrik(suhu_clean, ft_ses_001, "SES (alpha = 0.01)"),
+  hitung_metrik(suhu_clean, ft_ses_01,  "SES (alpha = 0.1)"),
+  hitung_metrik(suhu_clean, ft_ses_02,  "SES (alpha = 0.2)"),
+  hitung_metrik(suhu_clean, ft_des_001, "DES (alpha = 0.01)"),
+  hitung_metrik(suhu_clean, ft_des_01,  "DES (alpha = 0.1)"),
+  hitung_metrik(suhu_clean, ft_des_02,  "DES (alpha = 0.2)")
+)
+
+tabel_perbandingan <- tabel_perbandingan[order(tabel_perbandingan$MAPE_Pct), ]
+row.names(tabel_perbandingan) <- NULL
+
+print(tabel_perbandingan)
+
+
+cat("\n=======================================================\n")
+cat("Metode Peramalan Terbaik (MAPE Terendah):", tabel_perbandingan$Metode[1], "\n")
+cat("Nilai MAPE :", tabel_perbandingan$MAPE_Pct[1], "%\n")
+cat("Nilai MAD  :", tabel_perbandingan$MAD[1], "\n")
+cat("Nilai MSE  :", tabel_perbandingan$MSE[1], "\n")
+cat("Nilai RMSE :", tabel_perbandingan$RMSE[1], "\n")
+cat("=======================================================\n")
+```
+
 
