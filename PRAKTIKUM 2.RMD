@@ -1,1 +1,234 @@
+---
+title: "Analisis Peramalan Deret Waktu"
+author: "Bradja Putra Jajuli"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: united
+    highlight: tango
+    toc: true
+    toc_float: true
+---
 
+# REGRESI DATA 1
+
+## INPUT DATA
+
+```{r}
+library(dplyr)
+library(TTR)
+library(forecast)
+library(orcutt)
+library(HoRM)
+
+market_share <- c(3.63, 4.2, 3.33, 4.54, 2.89, 4.87, 4.9, 5.29, 6.18, 7.2, 7.25, 6.09, 6.8, 8.65, 8.43, 8.29, 7.18, 7.9, 8.45, 8.32)
+price <- c(0.97, 0.95, 0.99, 0.91, 0.98, 0.9, 0.89, 0.86, 0.85, 0.82, 0.79, 0.83, 0.81, 0.77, 0.76, 0.8, 0.83, 0.79, 0.76, 0.78)
+
+```
+
+## EKSPLORASI DATA
+
+```{r}
+data <- ts(market_share)
+plot(data, 
+     type = "l",
+     col = "red", 
+     main = "Grafik Market Share",
+     xlab = "Periode",
+     ylab = "Market Share")
+points(data, 
+       col = "black")
+plot(price, 
+     type = "l",
+     col = "red", 
+     main = "Grafik Price",
+     xlab = "Periode",
+     ylab = "Price")
+points(price, 
+       col = "black")
+```
+
+## MARKET SHARE
+
+```{r}
+t <- 1:length(market_share)
+
+model_market <- lm(market_share~t)
+summary (model_market)
+```
+
+### DURBIN WATSON 
+
+```{r}
+library(lmtest)
+dwtest(model_market)
+sisaan <- residuals(model_market)
+n <- length(sisaan)
+par(mfrow = c(2,2), mar = c(4,4,3,2))
+acf(sisaan, lag.max = 10, main = "Plot ACF Sisaan Model",
+    col = "#D32F2F", lwd = 2)
+```
+
+
+```{r}
+plot(t, market_share,
+     type ="o", 
+     col = "black",
+     lws= 1.5,
+     main = "Regresi deret waktu : Market Share vs Waktu", 
+     xlab = "waktu", 
+     ylab = "market share")
+lines(t, fitted(model_market), col = "#D32F2F", lwd = 2, lty = 1)
+legend("topleft", 
+       legend = c("Aktual", "Tren Linier"),
+       col = c("black", "#D32F2F"), 
+       lwd = 2, lty = c(1, 1), bty = "n")
+```
+
+### MODEL TERBAIK 
+
+$$\widehat{\text{market\share}}_t = 3.1465 + 0.2927\,t$$
+Model tidak memiliki Autokorelasi, sehingga model ini valid untuk digunakan 
+
+## MARKET SHARE VS PRICE
+
+```{r}
+model_market_price_tren <- lm(market_share~price+t)
+summary(model_market_price_tren)
+```
+
+### PENDETEKSIAN AUTOKORELASI
+
+```{r}
+dwtest(model_market_price_tren)
+sisaan2 <- residuals(model_market_price_tren)
+n <- length (sisaan2)
+
+acf(sisaan, lag.max = 10, main = "Plot ACF Sisaan Model",
+    col = "#D32F2F", lwd = 2)
+```
+terdapat Autokorelasi positif 
+
+#### Metode Cochrane Orcutt 
+
+```{r}
+library(orcutt)
+model_co <- cochrane.orcutt(model_market_price_tren)
+summary(model_co)
+
+```
+
+##### RHO OPTIMUM 
+
+```{r}
+rho <- model_co$rho
+rho
+```
+
+### MODEL TERBAIK
+
+$$\widehat{\text{market\share}}_t = 23.3012 - 20.8751\,\text{price}_t + 0.0634\,t$$
+
+# REGRESI DATA 2
+
+## INPUT DATA
+
+```{r}
+tahun <- c(1975:2014)
+sales <- c(11.7, 12,12.3, 12.8, 13.1, 13.6, 13.9, 14.4, 14.7, 15.3, 15.5, 15.8, 16.1, 16.6, 16.9, 16.7, 16.9, 17.4, 17.6, 17.9, 18, 17.9, 18, 18.2, 18.2, 18.3, 18.6, 19.2, 19.3, 19.5, 19.2, 19.3, 19.5, 20, 20, 19.9, 19.8, 19.9, 20.2, 21 )
+Adver <- c(9.4, 9.6, 10, 10.4, 10.8, 10.9, 11.7, 12.2, 12.5, 12.9, 13, 13.2, 13.8, 14.2, 14.6, 14.4, 15, 15.4, 15.7, 15.9, 15.9, 16, 16.3, 16.2, 16.8, 17.3, 17.6, 18.1, 18.3, 18.5, 18.7, 18.9, 19.2, 20, 20, 20.3, 20.4, 21, 21.5, 22.1)
+
+```
+
+## EKSPLORASI
+
+```{r}
+plot(sales, 
+     type = "l", 
+     col ="red",
+     main = "Visual data Sales"
+     )
+points(sales, 
+       col = "black")
+
+plot(Adver, 
+     type = "l", 
+     col ="red", 
+     main = "Visual data Adver")
+points(Adver, 
+       col  = "black")
+```
+
+## SALES VS TAHUN 
+
+```{r}
+model_sales <- lm(sales~tahun)
+summary(model_sales)
+```
+
+### PENDETEKSIAN AUTOKORELASI 
+
+```{r}
+dwtest(model_sales)
+sisaan <- residuals(model_sales)
+n <- length(sisaan)
+par(mfrow = c(2,2), mar = c(4,4,3,2))
+acf(sisaan, lag.max = 10, main = "Plot ACF Sisaan Model",
+    col = "#D32F2F", lwd = 2)
+```
+ada autokorelasi positif 
+
+#### PENANGANAN DENGAN METODE COCHRANE ORCUTT
+
+```{r}
+model_salesco <- cochrane.orcutt(model_sales)
+summary(model_salesco)
+```
+
+#### RHO OPTIMAL
+
+```{r}
+rho <- model_salesco$rho
+rho
+```
+### MODEL TERBAIK 
+
+$$\widehat{\text{Sales}}_t = 3.1465 + 0.2927\,t$$
+
+## SALES VS ADVER
+
+```{r}
+model_sales_adverts <- lm(sales~Adver + tahun)
+summary(model_sales_adverts)
+```
+
+### PENDETEKSIAN AUTOKORELASI
+
+```{r}
+dwtest(model_sales_adverts)
+sisaan <- residuals(model_sales_adverts)
+n <- length(sisaan)
+par(mfrow = c(2,2), mar = c(4,4,3,2))
+acf(sisaan, lag.max = 10, main = "Plot ACF Sisaan Model",
+    col = "#D32F2F", lwd = 2)
+```
+
+ada autokorelasi positif 
+
+### PENANGANAN
+
+```{r}
+model_sales_adverco <- cochrane.orcutt(model_sales_adverts)
+summary(model_sales_adverco)
+```
+
+### RHO OPTIMUM 
+
+```{r}
+rho <- model_sales_adverco$rho
+rho
+```
+
+## MODEL TERBAIK
+
+$$\widehat{\text{sales}}_t = -9.4463 + 0.4737\,\text{Adver}_t + 0.0099\,\text{tahun}_t$$
