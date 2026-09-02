@@ -18,7 +18,7 @@ output:
 library(dplyr)
 library(TTR)
 library(forecast)
-library(orcutt)
+library(prais)
 library(HoRM)
 
 market_share <- c(3.63, 4.2, 3.33, 4.54, 2.89, 4.87, 4.9, 5.29, 6.18, 7.2, 7.25, 6.09, 6.8, 8.65, 8.43, 8.29, 7.18, 7.9, 8.45, 8.32)
@@ -125,9 +125,67 @@ rho <- model_co$rho
 rho
 ```
 
-### MODEL TERBAIK
+##### MODEL CHOCHRANE ORCUTT
 
 $$\widehat{\text{market\share}}_t = 23.3012 - 20.8751\,\text{price}_t + 0.0634\,t$$
+
+#### METODE HILDRETH-LU
+
+```{r}
+library(lmtest)
+n <- length(market_share)
+rho_grid <- seq(-0.99, 0.99, by = 0.01)
+sse_list <- numeric(length(rho_grid))
+
+for (i in seq_along(rho_grid)) {
+  r <- rho_grid[i]
+  y_star  <- market_share[-1] - r * market_share[-n]
+  x1_star <- price[-1] - r * price[-n]
+  x2_star <- t[-1] - r * t[-n]
+  
+  fit <- lm(y_star ~ x1_star + x2_star)
+  sse_list[i] <- sum(residuals(fit)^2)
+}
+
+
+rho_opt <- rho_grid[which.min(sse_list)]
+y_trans  <- market_share[-1] - rho_opt * market_share[-n]
+x1_trans <- price[-1] - rho_opt * price[-n]
+x2_trans <- t[-1] - rho_opt * t[-n]
+model_hl_final <- lm(y_trans ~ x1_trans + x2_trans)
+beta0_asli <- coef(model_hl_final)[1] / (1 - rho_opt)
+beta1_asli <- coef(model_hl_final)[2]
+beta2_asli <- coef(model_hl_final)[3]
+cat("Koefisien Model Asli Terkoreksi:\n")
+print(c(Intercept = as.numeric(beta0_asli), 
+        price = as.numeric(beta1_asli), 
+        t = as.numeric(beta2_asli)))
+summary(model_hl_final)
+
+```
+
+##### RHO OPTIMUM
+```{r}
+cat("Rho Optimum :", rho_opt, "\n")
+cat("SSE Minimum :", min(sse_list), "\n\n")
+
+```
+
+##### PENGUJIAN AUTOKORELASI MODEL BARU
+
+```{r}
+dwtest(model_hl_final)
+```
+
+##### MODEL
+
+$$\widehat{\text{market\_share}}_t = 23.2947 - 20.8674\,\text{price}_t + 0.0634\,t$$
+
+### MODEL TERBAIK 
+
+$$\widehat{\text{market\_share}}_t = 23.2947 - 20.8674\,\text{price}_t + 0.0634\,t$$
+$R^2$ dan Adjusted $R^2$: Nilai pada model Hildreth-Lu ($R^2 = 0.9267$, $R^2_{\text{adj}} = 0.9176$) sedikit lebih tinggi dibandingkan Cochrane-Orcutt ($R^2 = 0.9263$, $R^2_{\text{adj}} = 0.9171$). Ini menandakan proporsi keragaman data yang dijelaskan oleh peubah penjelas setelah transformasi quasi-differencing lebih besar pada Hildreth-Lu.
+
 
 # REGRESI DATA 2
 
@@ -185,15 +243,77 @@ model_salesco <- cochrane.orcutt(model_sales)
 summary(model_salesco)
 ```
 
-#### RHO OPTIMAL
+##### RHO OPTIMAL
 
 ```{r}
 rho <- model_salesco$rho
 rho
 ```
+
+##### DURBIN WATSON MODEL BARU 
+
+```{r}
+dwtest(model_salesco)
+```
+autokorelasi telah teratasi
+
+##### MODEL COCHRANE ORCUTT
+
+$$\widehat{\text{Sales}}_t = 3.1465 + 0.2927\,t$$
+
+#### METODE HILDRETH-LU 
+
+```{r}
+n <- length(sales)
+rho_grid <- seq(-0.99, 0.99, by = 0.01)
+sse_list <- numeric(length(rho_grid))
+
+for (i in seq_along(rho_grid)) {
+  r <- rho_grid[i]
+  y_star <- sales[-1] - r * sales[-n]
+  x_star <- tahun[-1] - r * tahun[-n]
+  
+  fit <- lm(y_star ~ x_star)
+  sse_list[i] <- sum(residuals(fit)^2)
+}
+```
+
+##### RHO OPTIMUM 
+
+```{r}
+rho_opt <- rho_grid[which.min(sse_list)]
+cat("--- HASIL HILDRETH-LU (sales ~ tahun) ---\n")
+cat("Rho Optimum :", rho_opt, "\n")
+cat("SSE Minimum :", min(sse_list), "\n\n")
+```
+
+##### MODEL HILDRETH-LU
+
+```{r}
+y_trans <- sales[-1] - rho_opt * sales[-n]
+x_trans <- tahun[-1] - rho_opt * tahun[-n]
+model_hl_tahun <- lm(y_trans ~ x_trans)
+beta0_asli <- coef(model_hl_tahun)[1] / (1 - rho_opt)
+beta1_asli <- coef(model_hl_tahun)[2]
+cat("Koefisien Asli Terkoreksi:\n")
+print(c(Intercept = as.numeric(beta0_asli), tahun = as.numeric(beta1_asli)))
+
+cat("\n--- RINGKASAN MODEL TRANSFORMASI ---\n")
+summary(model_hl_tahun)
+```
+
+##### DURBIN WATSON TEST MODEL HILDRET-LU
+
+```{r}
+cat("\n--- UJI DURBIN-WATSON MODEL TERKOREKSI ---\n")
+dwtest(model_hl_tahun)
+```
+Autokorelasi tidak teratasi, maka model tidak valid
+
 ### MODEL TERBAIK 
 
 $$\widehat{\text{Sales}}_t = 3.1465 + 0.2927\,t$$
+
 
 ## SALES VS ADVER
 
@@ -215,20 +335,90 @@ acf(sisaan, lag.max = 10, main = "Plot ACF Sisaan Model",
 
 ada autokorelasi positif 
 
-### PENANGANAN
+#### PENANGANAN
 
 ```{r}
 model_sales_adverco <- cochrane.orcutt(model_sales_adverts)
 summary(model_sales_adverco)
 ```
 
-### RHO OPTIMUM 
+##### RHO OPTIMUM 
 
 ```{r}
 rho <- model_sales_adverco$rho
 rho
 ```
 
-## MODEL TERBAIK
+##### PENDETEKSIAN MODEL BARU 
+
+```{r}
+dwtest(model_sales_adverco)
+```
+autokorelasi telah teratasi
+
+##### MODEL COCHRANE ORCUTT
 
 $$\widehat{\text{sales}}_t = -9.4463 + 0.4737\,\text{Adver}_t + 0.0099\,\text{tahun}_t$$
+
+#### METODE HILDRETH-LU
+
+```{r}
+library(lmtest)
+n <- length(sales)
+rho_grid <- seq(-0.99, 0.99, by = 0.01)
+sse_list <- numeric(length(rho_grid))
+
+for (i in seq_along(rho_grid)) {
+  r <- rho_grid[i]
+  y_star  <- sales[-1] - r * sales[-n]
+  x1_star <- Adver[-1] - r * Adver[-n]
+  x2_star <- tahun[-1] - r * tahun[-n]
+  
+  fit <- lm(y_star ~ x1_star + x2_star)
+  sse_list[i] <- sum(residuals(fit)^2)
+}
+```
+
+##### RHO OPTIMUM
+
+```{r}
+# 3. Ambil nilai rho optimum
+rho_opt <- rho_grid[which.min(sse_list)]
+cat("--- HASIL HILDRETH-LU ---\n")
+cat("Rho Optimum :", rho_opt, "\n")
+cat("SSE Minimum :", min(sse_list), "\n\n")
+```
+
+##### MODEL BARU
+
+```{r}
+y_trans  <- sales[-1] - rho_opt * sales[-n]
+x1_trans <- Adver[-1] - rho_opt * Adver[-n]
+x2_trans <- tahun[-1] - rho_opt * tahun[-n]
+model_hl_sales <- lm(y_trans ~ x1_trans + x2_trans)
+beta0_asli <- coef(model_hl_sales)[1] / (1 - rho_opt)
+beta1_asli <- coef(model_hl_sales)[2]
+beta2_asli <- coef(model_hl_sales)[3]
+cat("Koefisien Model Asli Terkoreksi:\n")
+print(c(Intercept = as.numeric(beta0_asli), 
+        Adver = as.numeric(beta1_asli), 
+        tahun = as.numeric(beta2_asli)))
+
+cat("\n--- RINGKASAN MODEL TRANSFORMASI (Uji t & Signifikansi) ---\n")
+summary(model_hl_sales)
+
+```
+
+##### DURBIN WATSON MODEL BARU
+
+```{r}
+cat("\n--- UJI DURBIN-WATSON SETELAH PENANGANAN ---\n")
+dwtest(model_hl_sales)
+```
+autokorelasi tidak teratasi, maka model tidak valid dan baik menggunakan Chochrane Orcutt 
+
+### MODEL TERBAIK
+
+$$\widehat{\text{sales}}_t = -9.4463 + 0.4737\,\text{Adver}_t + 0.0099\,\text{tahun}_t$$
+
+
