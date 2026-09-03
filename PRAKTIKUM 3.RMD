@@ -1,1 +1,169 @@
+---
+title: "Analisis Peramalan Deret Waktu"
+author: "Bradja Putra Jajuli"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: united
+    highlight: tango
+    toc: true
+    toc_float: true
+---
+
+# INPUT DAN EKSPLORASI DATA 1
+```{r}
+library(readxl)
+
+data <- read_xlsx("C:\\Users\\USER\\Downloads\\Untitled spreadsheet.xlsx")
+market <- data$`Market share`
+price <- data$Price
+
+plot( market, 
+      type = "l")
+
+plot(price, 
+     type = "l")
+
+plot (x = market, y = price,
+      type = "p",
+      xlab = "market",
+      ylab = "price")
+```
+data terlihat tidak stasioner baik dalam ragam atau mean, tetapi kita perlu pengujian lebih lanjut 
+
+Jika $p\text{-value} < 0.05 \implies$ Tolak $H_0 \implies$ Peubah tersebut stasioner pada level ($I(0)$).  
+
+Jika $p\text{-value} \ge 0.05 \implies$ Gagal tolak $H_0 \implies$ Peubah tersebut tidak stasioner.
+
+```{r}
+library (tseries)
+
+adf.test(market)
+adf.test(price)
+
+```
+
+berdasarkan hasil uji, data TIDAK STATIONER
+
+## MODEL ARDL
+
+```{r}
+library(ARDL)
+
+df <- data.frame(market = market, price = price)
+
+model_auto <- auto_ardl(market ~ price, data = df, max_order=c(2,2))
+cat("Orde Lag Terpilih :", model_auto$best_order, "\n")
+
+```
+
+```{r}
+model_ardl <- model_auto$best_model
+summary(model_ardl)
+```
+```{r}
+bounds_f_test(model_ardl, case = 3)
+```
+Nilai $p\text{-value}$: $0.145$ (lebih besar dari $\alpha = 0.05$) maka data dikatakan TIDAK KOINTEGRITAS
+
+Hasilnya data valid menggunakan model ARDL dengan model akhir sebagai berikut 
+
+$$\widehat{\text{Market}}_t = 19.0040 + 0.3382\,\text{Market}_{t-1} - 21.2318\,\text{Price}_t + 6.3274\,\text{Price}_{t-1} - 2.5389\,\text{Price}_{t-2}$$
+
+```{r}
+periode <- 3:length(market)
+y <- market[periode]
+y_ardl <- as.numeric(fitted(model_ardl))
+
+plot(periode, y, type ="b", col= "black", lwd = 2, 
+     ylim = range(c(y, y_ardl)),
+     xlab = "periode", 
+     ylab = "market")
+
+lines(periode, y_ardl, type = "b", pch = 17, col = "blue", lwd = 2, lty = 2)
+grid(col = "lightgray", lty = "dotted")
+legend("topleft", 
+       legend = c("Data Aktual", "Prediksi ARDL(1, 2)"),
+       col = c("black", "blue"), 
+       pch = c(19, 17), 
+       lty = c(1, 2), 
+       lwd = 2, 
+       bty = "n")
+```
+
+
+### PERHITUNGAN MAPE 
+
+```{r}
+library(forecast)
+
+akurasi_ARDL <- accuracy(model_ardl)
+akurasi_ARDL
+
+MAPE_ARDL <- akurasi_ARDL["Training set", "MAPE"]
+MAPE_ARDL
+```
+
+## MODEL KOYCK 
+
+```{r}
+library(dLagM)
+
+model_koyck <- koyckDlm(x= market, y = price)
+summary (model_koyck)
+```
+$$Y_t = 0.2035 + 0.7667 Y_{t-1} - 0.0022 X_t + V_t$$
+
+### PERHITUNGAN MAPE 
+
+```{r}
+y <- market[-1]
+y_duga <- fitted(model_koyck$model)
+e <- y - y_duga
+
+MSE <- mean(e^2)
+RMSE <- sqrt(MSE)
+MAE <- mean(abs(e))
+MAPE_KOYCK <- mean(abs(e/y))*100
+
+MAPE_KOYCK
+```
+
+## MODEL AD-HOC 
+
+```{r}
+n <- length(market)
+
+df_adhoc <- data.frame (
+  y = market [3:n], 
+  xt = price [3:n], 
+  xt1 = price [2:(n-1)], 
+  xt2 = price [1:(n-2)]
+  
+)
+
+model_adhoc <- lm(y~xt + xt1 + xt2, data = df_adhoc)
+summary(model_adhoc)
+```
+
+$$\widehat{Y}_t = 28.208 - 20.836\,X_t - 1.401\,X_{t-1} - 3.536\,X_{t-2}$$
+
+### PERHITUNGAN MAPE
+
+```{r}
+akurasi_adhoc <- accuracy(model_adhoc)
+akurasi_adhoc
+
+MAPE_adhoc <- akurasi_adhoc["Training set", "MAPE"]
+MAPE_adhoc
+```
+
+## PERBANDINGAN MAPE 
+
+```{r}
+tabel_mape <- data.frame (ARDL = MAPE_ARDL, KOYCK = MAPE_KOYCK, ADHOC = MAPE_adhoc)
+tabel_mape
+```
+
+berdasarkan perhitungan MAPE, model ARDL adalah model paling baik, sesuai dengan teori bahwa ketika data TIDAK STATIONER dan TIDAK KOINTEGRASI, cocok menggunakan ARDL
 
