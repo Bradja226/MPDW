@@ -109,10 +109,28 @@ MAPE_ARDL
 ```{r}
 library(dLagM)
 
-model_koyck <- koyckDlm(x= market, y = price)
+model_koyck <- koyckDlm(x= price, y = market)
 summary (model_koyck)
 ```
-$$Y_t = 0.2035 + 0.7667 Y_{t-1} - 0.0022 X_t + V_t$$
+$$Y_t = 14.3615 + 0.4360 Y_{t-1} - 12.6202 X_t + V_t$$
+
+```{r}
+n <- length(market)
+y_aktual <- market[2:n]
+y_duga   <- as.numeric(fitted(model_koyck$model))
+periode  <- 2:n
+
+plot(periode, y_aktual, type = "b", pch = 19, col = "black", lwd = 2,
+     ylim = range(c(y_aktual, y_duga), na.rm = TRUE),
+     xlab = "Periode Waktu (t)", ylab = "Market Share",
+     main = "Pangsa Pasar Aktual vs Nilai Duga Model Koyck")
+lines(periode, y_duga, type = "b", pch = 17, col = "#2b8cbe", lwd = 2, lty = 2)
+grid(col = "lightgray", lty = "dotted")
+legend("topright", legend = c("Aktual (Market)", "Duga (Koyck)"),
+       col = c("black", "#2b8cbe"), pch = c(19, 17), lty = c(1, 2), lwd = 2, bty = "n")
+
+```
+
 
 ### PERHITUNGAN MAPE 
 
@@ -148,6 +166,28 @@ summary(model_adhoc)
 
 $$\widehat{Y}_t = 28.208 - 20.836\,X_t - 1.401\,X_{t-1} - 3.536\,X_{t-2}$$
 
+```{r}
+periode  <- 3:n
+y_aktual <- df_adhoc$y
+y_duga   <- as.numeric(fitted(model_adhoc))
+
+plot(periode, y_aktual, type = "b", pch = 19, col = "black", lwd = 2,
+     ylim = range(c(y_aktual, y_duga), na.rm = TRUE),
+     xlab = "Periode Waktu (t)", ylab = "Market Share",
+     main = "Pangsa Pasar Aktual vs Nilai Duga Model Ad-Hoc (Lag 2)")
+lines(periode, y_duga, type = "b", pch = 15, col = "#e7298a", lwd = 2, lty = 2)
+grid(col = "lightgray", lty = "dotted")
+legend("topright", 
+       legend = c("Aktual (Market)", "Nilai Duga Ad-Hoc"),
+       col = c("black", "#e7298a"), 
+       pch = c(19, 15), 
+       lty = c(1, 2), 
+       lwd = 2, 
+       bty = "n")
+
+```
+
+
 ### PERHITUNGAN MAPE
 
 ```{r}
@@ -166,4 +206,196 @@ tabel_mape
 ```
 
 berdasarkan perhitungan MAPE, model ARDL adalah model paling baik, sesuai dengan teori bahwa ketika data TIDAK STATIONER dan TIDAK KOINTEGRASI, cocok menggunakan ARDL
+
+# INPUT DAN EKSPLORASI DATA 2
+
+```{r}
+tahun <- c(1975:2014)
+sales <- c(11.7, 12,12.3, 12.8, 13.1, 13.6, 13.9, 14.4, 14.7, 15.3, 15.5, 15.8, 16.1, 16.6, 16.9, 16.7, 16.9, 17.4, 17.6, 17.9, 18, 17.9, 18, 18.2, 18.2, 18.3, 18.6, 19.2, 19.3, 19.5, 19.2, 19.3, 19.5, 20, 20, 19.9, 19.8, 19.9, 20.2, 21 )
+Adver <- c(9.4, 9.6, 10, 10.4, 10.8, 10.9, 11.7, 12.2, 12.5, 12.9, 13, 13.2, 13.8, 14.2, 14.6, 14.4, 15, 15.4, 15.7, 15.9, 15.9, 16, 16.3, 16.2, 16.8, 17.3, 17.6, 18.1, 18.3, 18.5, 18.7, 18.9, 19.2, 20, 20, 20.3, 20.4, 21, 21.5, 22.1)
+```
+
+```{r}
+plot (sales, 
+      type ="l")
+points(sales, 
+       col = "red", 
+       lwd = 1)
+plot(Adver, 
+     type = "l")
+points(Adver, 
+       col = "red", 
+       lwd = 1)
+```
+Jika $p\text{-value} < 0.05 \implies$ Tolak $H_0 \implies$ Peubah tersebut stasioner pada level ($I(0)$).  
+
+Jika $p\text{-value} \ge 0.05 \implies$ Gagal tolak $H_0 \implies$ Peubah tersebut tidak stasioner.
+
+```{r}
+library(tseries)
+adf.test(sales)
+adf.test(price)
+```
+Data tidak stationer
+
+## MODEL ARDL 
+```{r}
+df <- data.frame(sales = sales, adver = Adver)
+
+model_auto <- auto_ardl(sales~adver, data = df,
+max_order = c(2,2))
+cat ("Order Lag Terpilih :", model_auto$best_order, "\n")
+```
+```{r}
+model_ardl2 <- model_auto$best_model
+summary(model_ardl2)
+```
+
+```{r}
+bounds_f_test(model_ardl2, case=3)
+```
+Nilai $p\text{-value}$: $0.145$ (lebih besar dari $\alpha = 0.05$) maka data dikatakan TIDAK KOINTEGRITAS
+
+Hasilnya data valid menggunakan model ARDL dengan model akhir sebagai berikut 
+
+$$\widehat{\text{Sales}}_t = 0.7797 + 0.9163\,\text{Sales}_{t-1} + 0.4792\,\text{Adver}_t - 0.0753\,\text{Adver}_{t-1} - 0.3645\,\text{Adver}_{t-2}$$
+
+```{r}
+periode <- 3:length(sales)
+y <- sales[periode]
+y_ardl <- as.numeric(fitted(model_ardl2))
+
+plot(periode, 
+     y, 
+     type = "b", 
+     col = "black", 
+     lwd = 2, 
+     ylim = range(c(y, y_ardl)), 
+     xlab = "Periode", 
+     ylab = "Sales")
+
+lines(periode, y_ardl, type = "b", pch = 17, col = "blue", lwd =2, lty = 2)
+grid(col = "lightgray", lty = "dotted")
+legend("topleft", 
+       legend = c("Data Aktual", "Prediksi ARDL(1, 2)"),
+       col = c("black", "blue"), 
+       pch = c(19, 17), 
+       lty = c(1, 2), 
+       lwd = 2, 
+       bty = "n")
+```
+
+### PERHITUNGAN MAPE
+
+```{r}
+akurasi_ardl2 <- accuracy(model_ardl2)
+akurasi_ardl2
+
+mape_ardl2 <- akurasi_ardl2["Training set", "MAPE"]
+mape_ardl2
+```
+
+## MODEL KOYCK
+
+```{r}
+model_koyck2 <- koyckDlm(x = Adver, y=sales)
+summary(model_koyck2)
+```
+$$Y_t = 1.48721 + 0.83480 Y_{t-1} + 0.09853 X_t + V_t$$
+
+```{r}
+periode  <- 2:length(sales)
+y_aktual <- sales[periode]
+y_koyck  <- as.numeric(fitted(model_koyck2$model))
+
+plot(periode, y_aktual, type = "b", pch = 19, col = "black", lwd = 2,
+     ylim = range(c(y_aktual, y_koyck)),
+     xlab = "Periode Waktu (t)", ylab = "Sales",
+     main = "Data Aktual vs Nilai Duga Model Koyck")
+
+lines(periode, y_koyck, type = "b", pch = 18, col = "darkgreen", lwd = 2, lty = 2)
+
+grid(col = "lightgray", lty = "dotted")
+legend("topleft", 
+       legend = c("Data Aktual (Sales)", "Nilai Duga Koyck"),
+       col = c("black", "darkgreen"), 
+       pch = c(19, 18), 
+       lty = c(1, 2), 
+       lwd = 2, 
+       bty = "n")
+```
+
+
+
+### PERHITUNGAN MAPE
+
+```{r}
+y <- sales[-1]
+y_duga <- fitted(model_koyck2$model)
+e <- y - y_duga
+
+MAPE_KOYCK2 <- mean(abs(e/y))*100
+MAPE_KOYCK2
+```
+
+## MODEL AD-HOC
+
+```{r}
+n <- length(sales)
+
+df_adhoc2 <- data.frame (
+  y = sales [3:n], 
+  xt = Adver [3:n], 
+  xt1 = Adver [2:(n-1)], 
+  xt2 = Adver [1:(n-2)]
+)
+
+model_adhoc2 <- lm (y~xt + xt1 + xt2, data = df_adhoc2)
+summary(model_adhoc2)
+```
+$$\widehat{Y}_t = 6.8360 - 0.1825\,X_t + 0.5047\,X_{t-1} + 0.3617\,X_{t-2}$$
+
+```{r}
+periode  <- 3:n
+y_aktual <- df_adhoc2$y
+y_duga   <- as.numeric(fitted(model_adhoc2))
+
+plot(periode, y_aktual, type = "b", pch = 19, col = "black", lwd = 2,
+     ylim = range(c(y_aktual, y_duga)),
+     xlab = "Periode Waktu (t)", ylab = "Sales",
+     main = "Data Aktual vs Nilai Duga Model Ad-Hoc (Lag 2)")
+
+lines(periode, y_duga, type = "b", pch = 15, col = "firebrick", lwd = 2, lty = 2)
+
+grid(col = "lightgray", lty = "dotted")
+legend("topleft",
+       legend = c("Data Aktual (Sales)", "Nilai Duga Ad-Hoc"),
+       col = c("black", "firebrick"),
+       pch = c(19, 15),
+       lty = c(1, 2),
+       lwd = 2,
+       bty = "n")
+```
+
+
+### PERHITUNGAN MAPE
+
+```{r}
+akurasi_adhoc2 <- accuracy(model_adhoc2)
+akurasi_adhoc2
+
+mape_adhoc2 <- akurasi_adhoc2["Training set", "MAPE"]
+mape_adhoc2
+```
+
+## PERBANDINGAN MAPE
+
+```{r}
+tabel_mape2 <- data.frame (ARDL = mape_ardl2, KOYCK = MAPE_KOYCK2, ADHOC = mape_adhoc2)
+tabel_mape2
+```
+berdasarkan perhitungan MAPE, model ARDL adalah model paling baik, sesuai dengan teori bahwa ketika data TIDAK STATIONER dan TIDAK KOINTEGRASI, cocok menggunakan ARDL
+
+
+
 
