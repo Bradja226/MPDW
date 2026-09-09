@@ -254,7 +254,7 @@ summary(model_ardl2)
 ```{r}
 bounds_f_test(model_ardl2, case=3)
 ```
-Nilai $p\text{-value}$: $0.145$ (lebih besar dari $\alpha = 0.05$) maka data dikatakan TIDAK KOINTEGRITAS
+Nilai $p\text{-value}$: $0.145$ (lebih besar dari $\alpha = 0.05$) maka data dikatakan TIDAK KOINTEGRITAS 
 
 Hasilnya data valid menggunakan model ARDL dengan model akhir sebagai berikut 
 
