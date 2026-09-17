@@ -1,0 +1,75 @@
+---
+title: "PRAKTIKUM 5"
+author: "Bradja Putra Jajuli"
+date: "2026-09-17"
+output: html_document
+---
+
+# MA(2)
+
+## INPUT DATA
+
+```{r}
+set.seed(123)
+datama2 <- arima.sim(model = list(ma = c(0.4, 0.6)), n = 300, sd = 1)
+plot (datama2, 
+      typle = "l", 
+      col = "brown", 
+      lwd = 1.5, 
+      xlab = "Waktu (t)", 
+      ylab = "Data",)
+
+```
+
+## PLOT-PLOT
+
+```{r}
+library(TSA)
+acf(datama2, lag.max = 20, main = "Plot ACF MA(2)")
+pacf(datama2, lag.max = 20, main = "Plot PCAF MA(2)")
+eacf(datama2)
+```
+Plot ACF (Autocorrelation Function):Pola: Terputus signifikan (cut-off) setelah lag 2.Keterangan: Hanya lag 1 dan lag 2 yang berada di luar batas garis putus-putus (signifikan $\alpha = 5\%$), sedangkan lag 3 ke atas berada di dalam batas garis non-signifikan (mendekati nol). Ini indikator utama model $\text{MA}(2)$.
+
+Plot PACF (Partial Autocorrelation Function): Pola: Meluruh secara perlahan (dying down / eksponensial / gelombang sinus teredam). Keterangan: Nilai partial autocorrelation tidak langsung terputus, melainkan mengecil secara bertahap seiring bertambahnya lag.
+
+Matriks EACF (Extended Autocorrelation Function):Pola: Membentuk sudut "segitiga nol" (vertex of 'O's) pada baris $p = 0$ dan kolom $q = 2$.Keterangan: Posisi paling atas-kiri dari kumpulan simbol O pada matriks EACF menunjukkan orde $AR(p) = 0$ dan $MA(q) = 2$.
+
+## SCATTER PLOT 
+
+```{r}
+datama2rapi <- data.frame(
+  Yt   = datama2,
+  Yt_1 = c(NA, head(datama2, -1)),
+  Yt_2 = c(rep(NA, 2), head(datama2, -2)),
+  Yt_3 = c(rep(NA, 3), head(datama2, -3))
+)
+head(datama2rapi)
+```
+
+```{r}
+plot(datama2rapi$Yt, datama2rapi$Yt_1, 
+     type = "p",
+     col = "red", 
+     lwd = 1.5,
+     xlab = "Yt", 
+     ylab = "Yt-1", 
+     main = "Scatter Plot Yt VS Yt-1")
+
+plot(datama2rapi$Yt, datama2rapi$Yt_2, 
+     type = "p", 
+     col = "brown", 
+     lwd = 1.5, 
+     xlab = "Yt", 
+     ylab = "Yt-2", 
+     main = "Scatter Plot Yt VS Yt-2")
+
+plot(datama2rapi$Yt, datama2rapi$Yt_3, 
+     type = "p", 
+     col = "blue", 
+     lwd = 1.5, 
+     xlab = "Yt", 
+     ylab = "Yt-3", 
+     main = "Scatter Plot Yt VS Yt-3")
+```
+
