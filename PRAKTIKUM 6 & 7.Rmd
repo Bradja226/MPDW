@@ -1,0 +1,168 @@
+---
+title: "PRAKTIKUM 6 & 7"
+author: "Bradja Putra Jajuli"
+date: "2026-09-24"
+output: html_document
+---
+
+# INPUT DATA
+
+```{r}
+library(readxl)
+data <- read_xlsx("C:/Users/USER/Downloads/india_2000_2024_daily_weather (1).xlsx", sheet = "Sheet1")
+data <- data.frame(amatan = 1:length(data$TANGGAL), y = data$SUHU)
+head(data)
+
+plot(data$y, type = "l", col = "blue", lwd = 2, 
+     xlab = "Periode", ylab = "Suhu (°C)", main = "Plot Deret Waktu Suhu")
+
+```
+
+# PENGECEKAN STATIONER 
+
+```{r}
+library(tseries)
+
+adf.test(data$y)
+```
+data tidak stationer dalam nilai tengah 
+
+```{r}
+library(forecast)
+
+lambda <- BoxCox.lambda(data$y)
+lambda
+```
+data tidak stationer dalam ragam, karena nilai lambda mendekati 0
+
+## PENANGANAN TIDAK STATIONER 
+
+```{r}
+dy <- c(NA, diff(data$y))
+
+data <- data.frame(y = data$y, dy = dy)
+head (data)
+dy <- diff(data$y)
+adf.test(dy)
+plot (dy, type = "l", col = "blue", lwd = 2, xlab = "Periode", ylab = "Differencing 1 y", main = "plot deret waktu dy(1)")
+```
+data sudah stationer dalam nilai tengah
+
+```{r}
+lambda <- BoxCox.lambda(dy)
+lambda
+```
+nilai lambda nya pun sudah mendekati 1 sehingga data stationer dalam ragam
+
+karena kedua syarat stationer telah terpenuhi, maka data sudah stationer dan dapat dilakukan pemodelan ARIMA (p, 1, q)
+
+# PLOT-PLOT
+
+```{r}
+library(TSA)
+acf(dy, lag.max = 20, main = "PLOT ACF DY(1)")
+pacf (dy, lag.max=20, main = "PLOT PACF DY(1)")
+eacf(dy)
+
+```
+berdasarkan tabel EACF, saya memilih 1 model utama yaitu ARIMA (0,1,0), lalu 3 model pembanding, yaitu ARIMA (0,1,1), ARIMA (1,1,0), DAN ARIMA (1,1,1)
+
+
+# ARIMA 
+
+```{r}
+
+library(lmtest)
+
+ARIMA_010 <- Arima(data$y, order = c(0,1,0), method = "ML")
+ARIMA_110 <- Arima(data$y, order = c(1,1,0), method = "ML")
+ARIMA_011 <- Arima(data$y, order = c(0,1,1), method = "ML")
+ARIMA_111 <- Arima(data$y, order = c(1,1,1), method = "ML")
+
+
+summary (ARIMA_010)
+AIC(ARIMA_010, ARIMA_110, ARIMA_011, ARIMA_111)
+```
+
+P-Value semua model <0.05, maka model signifikan. 
+Berdasarkan nilai AIC terkecil, didapat model terbaik adalah ARIMA (0,1,0)
+
+# UJI DIAGNOSTIK MODEL 
+
+## AUTOKORELASI RESIDUAL
+
+$H_0$: Residual bersifat white noise (tidak ada autokorelasi).
+$H_1$: Residual tidak bersifat white noise.
+
+```{r}
+Box.test(residuals(ARIMA_010), lag = 10, type = "Ljung-Box")
+```
+
+P-Value > 0.05, artinya Tak Tolak $H_0$, membuktikan bahwa tidak ada autokorelasi
+
+## NORMALITAS RESIDUAL
+
+Hipotesis: 
+$H_0$: Residual berdistribusi normal.
+$H_1$: Residual tidak berdistribusi normal.
+
+```{r}
+jarque.bera.test(residuals(ARIMA_010))
+
+hist(residuals(ARIMA_010), main = "Histrogram Residual", col = "blue", prob = TRUE)
+qqnorm (residuals(ARIMA_010)); qqline (residuals(ARIMA_010), col = "red")
+summary(ARIMA_010)
+
+```
+
+residual tidak menyebar normal
+
+## RAGAM RESIDUAL HOMOGEN
+
+$H_0$: Tidak ada efek ARCH / Ragam residual homogen (homoskedastik).
+$H_1$: Ada efek ARCH / Ragam residual tidak homogen (heteroskedastik).
+
+```{r}
+library(FinTS)
+
+ArchTest(residuals(ARIMA_010), lags = 10)
+plot(residuals(ARIMA_010)^2, type = "p", col = "darkgreen",
+     main = "Plot Residual Kuadrat ARIMA(0,1,0)",
+     ylab = "Squared Residuals", xlab = "Periode")
+abline(h = 0, col = "red", lty = 2, lwd = 2)
+```
+berdasarkan P-Value dan visualisasi, ragam sisaan sudah homogen
+
+Berdasarkan 3 pengujian asumsi, hanya uji normalitas saja yang tidak terpenuhi, tetapi dengan dalil limit pusat bahwa jika data semakin banyak, maka sebaran data akan mendekati sebaran normal, dengan banyaknya amatan yaitu 100, maka cukup untuk mengatakan bahwa data berdistribusi normal 
+
+
+# MODEL TERBAIK 
+
+Berdasarkan kriteria nilai AIC terkecil, didapatkan model terbaik adalah **ARIMA(0,1,0)** dengan nilai AIC sebesar $596.4789$. Model ARIMA(0,1,0) atau dikenal sebagai model *Random Walk* memiliki bentuk persamaan matematis sebagai berikut:
+
+$$\Delta Y_t = e_t \quad \text{atau} \quad Y_t = Y_{t-1} + e_t$$
+
+Persamaan di atas menunjukkan bahwa dugaan nilai suhu harian pada periode ke-$t$ secara penuh didasarkan pada nilai suhu harian satu periode sebelumnya ($Y_{t-1}$) ditambah dengan komponen kejutan acak ($e_t$).
+
+
+# PERAMALAN 
+
+```{r}
+library(forecast)
+
+# 1. Melakukan peramalan 30 periode ke depan
+ramalan <- forecast(ARIMA_010, h = 30)
+
+# 2. Menampilkan tabel hasil peramalan
+print(ramalan)
+
+# 3. Visualisasi grafik peramalan
+plot(ramalan, 
+     main = "Peramalan Suhu Harian 30 Periode ke Depan - ARIMA(0,1,1)",
+     xlab = "Periode", 
+     ylab = "Suhu (°C)", 
+     col = "black",   
+     fcol = "red",    
+     lwd = 1.5)
+```
+
