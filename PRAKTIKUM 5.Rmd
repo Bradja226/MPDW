@@ -73,3 +73,136 @@ plot(datama2rapi$Yt, datama2rapi$Yt_3,
      main = "Scatter Plot Yt VS Yt-3")
 ```
 
+## PERHITUNGAN AUTOKORELASI 
+
+```{r}
+autokorelasi_sampel <- drop(acf(datama2, lag.max = 3, plot = FALSE)$acf)
+
+data.frame(
+  lag   = 1:3, 
+  nilai = round(autokorelasi_sampel, 5)
+)
+```
+
+```{r}
+nilai_sampel <- c(0.39291, 0.30149, -0.05872)
+
+# Menghitung nilai teoretis:
+# theta1 = 0.4, theta2 = 0.6
+# Penyebut: 1 + 0.4^2 + 0.6^2 = 1.52
+# rho_1 = (0.4 + 0.4*0.6) / 1.52 = 0.64 / 1.52 = 0.42105
+# rho_2 = 0.6 / 1.52 = 0.39474
+# rho_3 = 0
+
+nilai_teoretis <- c(0.42105, 0.39474, 0.00000)
+
+tabel_autokorelasi <- data.frame(
+  lag            = 1:3,
+  nilai_sampel   = nilai_sampel,
+  nilai_teoretis = round(nilai_teoretis, 5),
+  selisih        = round(abs(nilai_sampel - nilai_teoretis), 5)
+)
+
+tabel_autokorelasi
+```
+
+Nilai sampel pada lag 1 ($0.39291$) dan lag 2 ($0.30149$) bernilai positif signifikan dan mendekati nilai teoretisnya ($0.42105$ dan $0.39474$).
+
+Pada lag 3, nilai sampel berkurang drastis menuju $-0.05872$ (mendekati $0$), sesuai dengan sifat teoretis model $\text{MA}(2)$ yang mengalami cut-off setelah lag 2.
+
+
+# AR(2)
+
+## INPUT DATA
+
+```{r}
+library(TSA)
+
+set.seed(123)
+n <- 300
+phi1 <- 0.5
+phi2 <- 0.2
+
+data_ar2 <- arima.sim(model = list(ar = c(phi1, phi2)), n = n, sd = 1)
+e <- rnorm (n , mean = 0, sd = 1)
+y_manual <- numeric(n)
+
+y_manual[1] <- e[1]
+y_manual[2] <- phi1*y_manual[1]*e[2]
+
+for(t in 3:n){
+  y_manual[t] <- phi1*y_manual[t-1] + phi2*y_manual[t-2] + e[t]
+}
+data_ar2_manual <- ts(y_manual)
+
+plot(data_ar2, typle = "l", col = "blue", lwd = 1.5, 
+     main = "Time Series Plot AR(2)", xlab = "Waktu (t)", ylab = "Yt")
+```
+
+## PLOT-PLOT
+
+```{r}
+acf(data_ar2, lag.max = 20, main = "Plot ACF AR(2)")
+pacf(data_ar2, lag.max = 20, main = "Plot PCAF AR(2)")
+eacf(data_ar2)
+```
+
+## SCATTER PLOT 
+
+```{r}
+y <- as.numeric(data_ar2)
+df_ar2 <- data.frame(
+  Yt = y, 
+  Yt_1 = c(NA, head(y, -1)), 
+  Yt_2 = c(rep(NA, 2), head(y, -2)), 
+  Yt_3 = c(rep(NA, 3), head(y, -3))
+)
+
+plot(df_ar2$Yt_1, df_ar2$Yt, 
+     col = "brown", 
+     pch = 16, 
+     xlab = "Yt_1", 
+     ylab = "Yt", 
+     main = "Yt_1 VS Yt")
+plot(df_ar2$Yt_2,df_ar2$Yt, 
+     col = "red", 
+     pch = 16, 
+     xlab = "Yt_2", 
+     ylab = "Yt", 
+     main = "Yt_2 VS Yt")
+plot(df_ar2$Yt_3, df_ar2$Yt, 
+     col = "green", 
+     pch = 16, 
+     xlab = "Yt_3", 
+     ylab = "Yt", 
+     main = "Yt_3 VS Yt")
+```
+
+## NILAI AUTOKORELASI
+
+```{r}
+sample_acf <- drop(acf(data_ar2, lag.max = 3, plot = FALSE)$acf)
+
+theoretical_acf <- c(
+  1,
+  phi1 / (1 - phi2),
+  phi1 * (phi1 / (1 - phi2)) + phi2,
+  phi1 * (phi1 * (phi1 / (1 - phi2)) + phi2) + phi2 * (phi1 / (1 - phi2))
+)
+
+if(length(sample_acf) == 3) {
+  sample_acf <- c(1, sample_acf)
+}
+
+tabel_hasil <- data.frame(
+  Lag = 0:3,
+  Teoritis = round(theoretical_acf, 5),
+  Sampel = round(sample_acf, 5)
+)
+
+tabel_hasil
+```
+
+# ARMA (2,2)
+
+
